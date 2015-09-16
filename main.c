@@ -1,12 +1,13 @@
-#include <htc.h>
+//#include <htc.h>
+#include "BL21P01.h"
 #include "lamp.h"
 
 
 unsigned char gLedStrength;
 unsigned char gLampMode;
 unsigned char gLedWave;
-unsigned char gLedStatus;
-unsigned int gCrcCode;
+unsigned char gLedStatus @0x20;
+unsigned int gCrcCode @0x21;
 
 unsigned char gStrengthTemp;
 
@@ -145,7 +146,7 @@ void LampPowerOFF()
 	gLampMode = ADJUST_MODE;
 
 	gLedStrength = gStrengthTemp;
-	if(gLedStrength<LED_MIN_LEVEL|| gLedStrength>LED_MAX_LEVEL)
+	if((gLedStrength<LED_MIN_LEVEL)|| (gLedStrength>LED_MAX_LEVEL))
 		gLedStrength = LED_DEFAULT_LEVEL;
 
 	
@@ -167,6 +168,7 @@ void LampPowerOFF()
 	NOP
 	NOP
 	#endasm
+
 	
 	DisWatchdog();
 	key_interrupt_disable();
@@ -201,7 +203,7 @@ void changeLampStrength()
 	if(gLedWave == LED_STRENGTH_UP)
 	{
 		gLedStrength = gLedStrength + 1;
-		if(gLedStrength >= LED_MAX_LEVEL)
+		if(gLedStrength == LED_MAX_LEVEL)
 		{
 			#if 1
 					gLedStrength = gLedStrength -1;
@@ -345,7 +347,7 @@ void delay_with_key_detect()
 void factoryReset()
 {
 	unsigned char temp=0;
-	I2C_write(ADDR_STRENGTH_FLAG, 0x00);   //clear our flag
+	
 	GIE =0;
 	
 	PR = 150;
@@ -376,11 +378,11 @@ void InitConfig()
 
 
 	//IO  all output  , RA3 only input default
-	TRISA =0x00;		
+	TRISA =0x08;		//
 	WPUA = 0x00 ; //上拉禁止
-	IOCA = 0;	//IO level change interrupt disable
+	IOCA = 0x08;	//IO level change interrupt disable   ioca3=1;
 
-	INTCON =  0x28; //允许TMR0/RA 电平变化中断
+	INTCON =  0x60; //允许TMR0/RA 电平变化中断peie=1
 	
 	Cur_Ctl = 1;   //电阻并联
 
@@ -391,7 +393,7 @@ void InitConfig()
 	T1CON = 4;   //预分频、后分频无效
 
 	//TIMER0
-	OPTION  = 0x27;   //  Timer0 分频比1/256
+	OPTION  = 0x07;   //  Timer0 分频比1/256
 	TMR0 =0;
 	
 	//start timer1
@@ -429,13 +431,14 @@ void main()
 		{
 			if(gCountCHAR> 183)    //   3s/16.384ms  factoryReset();
  			{
+ 				I2C_write(ADDR_STRENGTH_FLAG, 0x00);   //clear our flag
 				factoryReset();
 			}
 		}
-		T0IE = 0;
-		gCountCHAR = 0;gCountINT = 0;
-		T0IE = 1;
 	}
+	
+	gCountCHAR = 0;
+	gCountINT = 0;
 
 	//check whether strength exists, if not, use default strength
 	gLedStrength = I2C_read(ADDR_STRENGTH_FLAG);
@@ -478,8 +481,13 @@ void main()
      						delay_ms(400);
 						temp++;
 					}while(temp<3);
+
+	EnWatchDog();
 	while(1)
 	{
+		#asm
+		CLRWDT
+		#endasm
 		if(P_KEY == 0)
 		{
 			delay_with_key_detect();
@@ -506,9 +514,6 @@ void main()
 				LampPowerOFF();
 		}
 		
-		#asm 
-		CLRWDT 
-		#endasm
 		
 	}	
 }

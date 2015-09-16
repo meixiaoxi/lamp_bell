@@ -2,10 +2,10 @@
 #define __LAMP_H__
 
 #define DisWatchdog()	WDTE=0
-#define EnWatchDog()		WDTE=0
+#define EnWatchDog()		WDTE=1
 	
-#define key_interrupt_enable()	IOCA3 = 1
-#define key_interrupt_disable()	IOCA3 = 0
+#define key_interrupt_enable()	INTCON |= 0x08
+#define key_interrupt_disable()	INTCON &= 0xf7
 
 
 #define tmr0_start()	
