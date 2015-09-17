@@ -4,36 +4,31 @@
 
 
 unsigned char gLedStrength;
-unsigned char gLampMode;
+unsigned char gLedLevel;
 unsigned char gLedWave;
-unsigned char gLedStatus @0x20;
-unsigned int gCrcCode @0x21;
+unsigned short g3STick;
 
-unsigned char gStrengthTemp;
-
-unsigned short gCountINT=0;
-unsigned char gCountCHAR=0;
-
-unsigned char fuck =0;
-
+unsigned char temp_LedWave;
 unsigned char isLongPress = 0;
+
+unsigned char gLedStatus;
 
 void interrupt isr(void)
 {
 	if(T0IF)
 	{
 		T0IF = 0;
-		gCountCHAR++;
-		if(gCountCHAR == 0xFF)
-			gCountINT++;
+		g3STick++;
 	}
 	if(RAIF)
 	{
 		RAIF =0;
+		gLedWave = 0x25;
 	}
 	
 }
 
+#if 0
 void	Wait_uSec(unsigned int DELAY)
 {
       unsigned int jj;                            //
@@ -42,7 +37,7 @@ void	Wait_uSec(unsigned int DELAY)
       
       while(jj)  jj--;                    //
 }
-
+#endif
 void delay_ms(unsigned int count)
 {
 	unsigned char ii;
@@ -57,13 +52,45 @@ void delay_ms(unsigned int count)
 }
 
 
-
+void factoryReset()
+{
+	unsigned char temp=0;
+	
+	GIE =0;
+	
+	do{
+		PR = 150;
+		delay_ms(1);
+		pwm_start();
+     		delay_ms(300);
+		PR = 0;
+		delay_ms(1);
+     		pwm_stop();
+		delay_ms(300);
+		temp++;
+	   }while(temp<3);
+	while(P_KEY == 0){};
+	while(1)
+	{
+                if(P_KEY ==0)
+                {
+                        delay_ms(10);
+                        if(P_KEY == 0)
+                        {
+                                EnWatchDog();
+                        }
+                }
+	}
+}
 
 void SlowChangeStrength(unsigned char mtype)
 {
 
 	unsigned char temp = 0;
 	unsigned char count = 0;
+	unsigned char mTemp = gLedWave;
+	if(gLedStrength == 8)
+		Cur_Ctl = 0;
 	  
 		if(mtype == POWER_ON)
 		{
@@ -71,123 +98,89 @@ void SlowChangeStrength(unsigned char mtype)
 			{
 				if(temp > gLedStrength)
 					break;
-				PR  = temp++;
+				PR  = temp;
+				if(temp == 255)
+					break;
 
-				/*
-				if(temp < 70)
-					delay_ms(30);
-				else
-					delay_ms(30);
-				*/
-				delay_ms(20);
-				if(P_KEY == 0)
-				{	
-					count++;
-				}
-				else if(count == 0)
-				{
-					continue;
-				}
-				else 
-				{
-					if(count>=2 && count <50)   //short key press
-					{
-						return;
-					}
-					count =0;	
-				}
+				temp++;
+				
+                                if(temp < 170)
+                                        delay_ms(15);    //60
+                                else
+                                        delay_ms(7);    //30
+                                        
+      				     if(P_KEY == 0)
+                                {       
+                                        count++;
+                                        if(count > 35 && mTemp != 0x54)   //short key press
+                                        {
+                                                //enter 小夜灯模式
+                                                //EnterNightMode();
+                                                return;
+                                        }
+                                }
+                                else
+                                {
+                                            count = 0;
+                                }
 			}
 
 		}
 		else if(mtype == POWER_OFF)
 		{
-			temp = PR;
-			
-			while(1)
-			{
-				if(mtype == POWER_OFF)
-				{
-					if(temp == 0)
-						break;
-				}
-				else
-				{
-					if(temp==LED_MIN_LEVEL-1)
-						break;
-				}
-				pwm_stop();
-				PR = temp--;
-				pwm_start();
-
-				delay_ms(20);
-
-			}
+			PR =0;
 		}
 
 	
 }
 
-void EnterNightMode()
-{
-	LoadCtl =1;
-	gStrengthTemp = PR;
-	pwm_stop();
-	PR = LED_MIN_LEVEL;
-	pwm_start();
-	Cur_Ctl= 0;
-	gLampMode = NIGHT_MODE;
-}
 
 void LampPowerOFF()
 {
-	fuck = 1;
 //	pwm_stop();
-	LoadCtl = 0;
-	gLampMode = ADJUST_MODE;
+	LoadCtl = 0;	
+	PWM_IO = 0;
 
-	gLedStrength = gStrengthTemp;
-	if((gLedStrength<LED_MIN_LEVEL)|| (gLedStrength>LED_MAX_LEVEL))
-		gLedStrength = LED_DEFAULT_LEVEL;
-
+	I2C_write(ADDR_ONOFF_FLAG, LED_NOW_OFF);
 	
 	DisWatchdog();
 
     	SlowChangeStrength(POWER_OFF);
-
-	gLedStatus = LED_NOW_OFF;
+	
 	
 	pwm_stop();
 	Cur_Ctl= 1;
-	while(P_KEY==0){};
+	g3STick = 0;
+	while(P_KEY==0)
+	{
+		 if(g3STick >350)
+                {
+                         I2C_write(ADDR_STRENGTH, 5);   //clear our flag
+                      factoryReset();
+                }
+	}
 	//delay_ms(5);
 	key_interrupt_enable();
-	gCountCHAR = gCountINT= 0;
+	delay_ms(5);
 	#asm
 	NOP
 	SLEEP
-	NOP
-	NOP
 	#endasm
 
 	
 	DisWatchdog();
 	key_interrupt_disable();
-	while(P_KEY == 0) //wait key release
-	{
-	}
-	
 	
 	EnWatchDog();
 	
 	pwm_start();
 
-	gLedStatus = LED_NOW_ON;
+	        //gLedStatus = LED_NOW_ON;
+        I2C_write(ADDR_ONOFF_FLAG, LED_NOW_ON);
+	 if(P_KEY==0)
+            gLedWave = 0x54;
     	SlowChangeStrength(POWER_ON);
 
-	if(PR != gLedStrength)
-	{
-		EnterNightMode();
-	}
 	if(PR <=PWM_NUM_START_LOAD)
 	{
 		LoadCtl = 1;
@@ -196,104 +189,13 @@ void LampPowerOFF()
 }
 
 
-unsigned char levelCount =0;
-void changeLampStrength()
-{
-	unsigned char temp = 0;
-	if(gLedWave == LED_STRENGTH_UP)
-	{
-		gLedStrength = gLedStrength + 1;
-		if(gLedStrength == LED_MAX_LEVEL)
-		{
-			#if 1
-					gLedStrength = gLedStrength -1;
-					do{
-						pwm_stop();
-						delay_ms(400);
-						pwm_start();
-     						delay_ms(400);
-						temp++;
-					}while(temp<3);
-					gLedWave = LED_STRENGTH_DN;
-			#else
-			if(levelCount == 0)
-			{
-				//led_blink();
-					do{
-						pwm_stop();
-						delay_ms(500);
-						pwm_start();
-     						delay_ms(500);
-						temp++;
-					}while(temp<4);
-			}
-			levelCount++;
-
-			gLedStrength = gLedStrength -1;
-			if(levelCount > 30)
-			{
-				levelCount =0;
-				gLedWave = LED_STRENGTH_DN;
-			}
-			#endif
-		}		
-	}
-	else
-	{
-		gLedStrength = gLedStrength - 1;
-		if(gLedStrength  == LED_MIN_LEVEL -1)
-		{
-			#if 1
-					gLedStrength = LED_MIN_LEVEL;
-					do{
-						pwm_stop();
-						delay_ms(400);
-						pwm_start();
-     						delay_ms(400);
-						temp++;
-					}while(temp<3);
-
-					gLedWave = LED_STRENGTH_UP;
-			#else					
-			if(levelCount == 0)
-			{
-				//led_blink();
-					do{
-						pwm_stop();
-						delay_ms(500);
-						pwm_start();
-     						delay_ms(500);
-						temp++;
-					}while(temp<4);
-							
-			}
-		
-			gLedStrength = LED_MIN_LEVEL;
-				
-			levelCount++;
-			if(levelCount > 30)
-			{
-				levelCount =0;
-			//	PA3 =0;
-				gLedWave = LED_STRENGTH_UP;
-			}
-			#endif
-		}	
-	}
-
-	pwm_stop();
-	PR  = gLedStrength;//gStrengthBuf[gLedStrength];
-	pwm_start();
-	if(PR<=PWM_NUM_START_LOAD)
-		LoadCtl=1;
-	else
-		LoadCtl=0;
-}
 
 void delay_with_key_detect()
 {
 	unsigned char  mCount = 0;
 
+	temp_LedWave = gLedWave;
+	
 	isLongPress = 3;
 	
 	delay_ms(10);
@@ -314,58 +216,26 @@ void delay_with_key_detect()
 			if(mCount>=100)    // 1s
 			{
 				isLongPress = 1;
-				if(gLampMode != ADJUST_MODE)
-					return;			
-				mCount =0;
-				changeLampStrength();
+				return;			
 			}
 		}
-		else
-		{
-			if(gLedStrength >150)
-			{
-				if(mCount >= 4)  //10ms
-				{
-					mCount = 0;
-					changeLampStrength();
-				}
-			}
-			else
-			{
-				if(mCount >= 6)  //60ms
-				{
-					mCount = 0;
-					changeLampStrength();
-				}
-			}
-		}
-
 	}	
 
 }
 
-void factoryReset()
-{
-	unsigned char temp=0;
-	
-	GIE =0;
-	
-	PR = 150;
-  	pwm_start();
 
-	do{
-		delay_ms(300);
-		pwm_start();
-     		delay_ms(300);
-     		pwm_stop();
-		temp++;
-	   }while(temp<3);
-	while(1)
-	{
-		#asm
-		SLEEP
-		#endasm
-	}
+void level2Strength()
+{
+        if(gLedLevel == 1)
+                gLedStrength =8;
+        else if(gLedLevel ==2)
+                gLedStrength = 9;
+        else if(gLedLevel == 3)
+                gLedStrength = 50;
+        else if(gLedLevel == 4)
+                gLedStrength = 150;
+        else
+                gLedStrength = 255;
 }
 	
 void InitConfig()
@@ -373,14 +243,26 @@ void InitConfig()
 	//key
 	GIE= 0;
 
-	gLampMode = ADJUST_MODE;
-	gLedWave = LED_STRENGTH_UP;	
+	g3STick = 0;
+	gLedWave = 0;
 
+	key_interrupt_disable();
+	IOCA = 0x08;	//IO level change interrupt disable   ioca3=1;
 
 	//IO  all output  , RA3 only input default
 	TRISA =0x08;		//
 	WPUA = 0x00 ; //上拉禁止
-	IOCA = 0x08;	//IO level change interrupt disable   ioca3=1;
+
+	PORTA = 0;
+
+	//I2C
+	TRISC2 = 0;
+	TRISC5 = 0;
+	WPUC2= 1;
+	WPUC5 = 1;
+	RC2=0;
+	RC5=0;
+	
 
 	INTCON =  0x60; //允许TMR0/RA 电平变化中断peie=1
 	
@@ -406,81 +288,76 @@ void InitConfig()
 
 void main()
 {
-	//Fosc   8MHz
-
-	DisWatchdog();
+	//Fosc   4MHz
 	InitConfig();
+	DisWatchdog();
 
-	if(gCrcCode != 0x51AE)
+#if 1
+	gLedStatus = I2C_read(ADDR_ONOFF_FLAG);
+
+
+	if(gLedStatus == LED_PRE_ON)
 	{
-		gCrcCode = 0x51AE; 
-		gLedStatus = LED_NOW_ON;
-	}
-	else if(gLedStatus == LED_PRE_ON)
-	{
-		gLedStatus = LED_NOW_OFF;
-		key_interrupt_enable();
+		I2C_write(ADDR_ONOFF_FLAG,LED_NOW_OFF);
+                key_interrupt_enable();
 		#asm
 		SLEEP
 		#endasm
 		key_interrupt_disable();
-		T0IE =0;
-		gCountCHAR = 0;
-		T0IE=1;
-		while(P_KEY==0)
-		{
-			if(gCountCHAR> 183)    //   3s/16.384ms  factoryReset();
- 			{
- 				I2C_write(ADDR_STRENGTH_FLAG, 0x00);   //clear our flag
-				factoryReset();
-			}
-		}
+		  DisWatchdog(); 
 	}
-	
-	gCountCHAR = 0;
-	gCountINT = 0;
+
+	EnWatchDog();
 
 	//check whether strength exists, if not, use default strength
 	gLedStrength = I2C_read(ADDR_STRENGTH_FLAG);
-	if(gLedStrength == 0xAB)  //ok, it's our flag
-	{
-		//delay_ms(5);
-		gLedStrength = I2C_read(ADDR_STRENGTH);
-	}
-	else
-	{
-		I2C_write(ADDR_STRENGTH_FLAG, 0xAB);  //write our flag
-		gLedStrength = LED_MAX_LEVEL;  //max level
-		//delay_ms(5);
-		I2C_write(ADDR_STRENGTH,254);
-	}	
+        if(gLedStrength == 0xAB)  //ok, it's our flag
+        {
+                //delay_ms(5);
+                gLedLevel = I2C_read(ADDR_STRENGTH);
+        }
+        else
+        {
+                I2C_write(ADDR_STRENGTH_FLAG, 0xAB);  //write our flag
+                gLedLevel = 1;  //max level
+                //delay_ms(5);
+                I2C_write(ADDR_STRENGTH,1);
+        }
 
 	//冗错处理	
-   if(gLedStrength > LED_MAX_LEVEL|| gLedStrength < LED_MIN_LEVEL)
-   {
-   	gLedStrength = LED_DEFAULT_LEVEL;
-   }
+         if(gLedLevel  == 0 || gLedLevel > 5)
+        {
+                gLedLevel = 5;
+        }
+		 
+	level2Strength();
+
+         I2C_write(ADDR_ONOFF_FLAG,LED_NOW_ON);
+
+         if(gLedStatus == LED_PRE_ON && P_KEY == 0)
+                gLedWave = 0x54;
 
 	PR = 0;
 	pwm_start();
-	gLedStatus = LED_NOW_ON;
 	SlowChangeStrength(POWER_ON);
 
-	if(PR != gLedStrength)
-	{
-		EnterNightMode();
-	}
-	if(PR <=PWM_NUM_START_LOAD)
-		LoadCtl = 1;
-
-						unsigned char temp=0;
-						do{
-						pwm_stop();
-						delay_ms(400);
-						pwm_start();
-     						delay_ms(400);
-						temp++;
-					}while(temp<3);
+         while(1)
+         {      
+                  if(PR <=PWM_NUM_START_LOAD)
+                  {
+                         LoadCtl = 1;
+                  }
+                          
+                if(PR != gLedStrength)
+                {
+                        LampPowerOFF();
+                }
+                  else
+                        break;
+                  #asm
+		CLRWDT
+		#endasm
+         }
 
 	EnWatchDog();
 	while(1)
@@ -492,28 +369,49 @@ void main()
 		{
 			delay_with_key_detect();
 			
-			if(isLongPress == 0)   //short press
+			if(isLongPress == 1 && gLedWave != 0x54)   //long press
 			{
-				if(gLampMode == ADJUST_MODE)
-					EnterNightMode();		
-				else
+				while(1)
+				{
 					LampPowerOFF();
+					if(PR <=PWM_NUM_START_LOAD)
+					{
+						LoadCtl = 1;
+					}
+					if(PR == gLedStrength)
+						break;
+					#asm
+					CLRWDT
+					#endasm
+				}   
 			}
-			else if(gLampMode ==  ADJUST_MODE)  //clear
+			else if(isLongPress == 0)  //short
 			{	
-				gCountCHAR =0;
-				gCountINT =0;
-				// lamp strength has been changed, we need save
-				I2C_write(ADDR_STRENGTH,gLedStrength);				
+                            if(temp_LedWave!= 0x54)
+                            {
+                                    if(gLedLevel ==5)
+                                        {
+                                                Cur_Ctl =0;
+                                                gLedLevel =1;
+                                        }
+                                        else
+                                        {
+                                                Cur_Ctl=1;
+                                                gLedLevel++;
+                                        }
+                                        level2Strength();
+                                        PR = gLedStrength;
+                                // lamp strength has been changed, we need save
+                                        I2C_write(ADDR_STRENGTH,gLedLevel);     
+                                         if(PR <=PWM_NUM_START_LOAD)
+                                        {
+                                         LoadCtl = 1;
+                                        }
+                                        else
+                                             LoadCtl=0;
+                                }		
 			}
-		}
-		
-		if(gLampMode == ADJUST_MODE) 
-		{
-			if(gCountINT >= 2647)      // 3 Hour  3*60*60*1000/16.384/255 = 2647
-				LampPowerOFF();
-		}
-		
-		
-	}	
+		}		
+	}
+#endif	
 }

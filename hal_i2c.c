@@ -1,31 +1,34 @@
 #include "BL21P01.h"
 
-#define SDA_H()			(RA2 = 1)
-#define SDA_L()			(RA2 = 0)
+#define SDA_H()			(RC2 = 1)
+#define SDA_L()			(RC2 = 0)
 
-#define SCL_H()			(RA1 = 1)
-#define SCL_L()			(RA1 = 0)
+#define SCL_H()			(RC5 = 1)
+#define SCL_L()			(RC5 = 0)
 
-#define GET_SDA() 		RA2
+#define GET_SDA() 		RC2
 
-#define CHG_SDA_OUT()	(TRISA2 = 0)
-#define CHG_SDA_IN()	(TRISA2 = 1)
+#define CHG_SDA_OUT()	(TRISC2 = 0)
+#define CHG_SDA_IN()	(TRISC2 = 1)
 
 
 #define IIC_ADDR  0xA0
 
-#define _nop_() 	Wait_uSec(10)
-#define swait_uSec(n) Wait_uSec(n)
+//#define _nop_() 	Wait_uSec(10)
+//#define swait_uSec(n) Wait_uSec(n)
 
-extern void	Wait_uSec(unsigned int DELAY);
+//extern void	Wait_uSec(unsigned int DELAY);
 extern void     delay_ms(unsigned int count);
+unsigned char markbit[] = {0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80};
+unsigned char temp_delay;
 static void IIC_START()
 {
 	SDA_H();
 	SCL_H();
-	_nop_();
+	for(temp_delay=0;temp_delay<5;temp_delay++);
 	SDA_L();
-	Wait_uSec(1);	
+	//Wait_uSec(1);	
+	for(temp_delay=0;temp_delay<5;temp_delay++);
 	SCL_L();
 	//_nop_();
 }	
@@ -36,9 +39,9 @@ static void IIC_STOP()
 	SCL_L();
 	SDA_L();
 	CHG_SDA_OUT();
-	Wait_uSec(1);
+	for(temp_delay=0;temp_delay<5;temp_delay++);
 	SCL_H();
-	Wait_uSec(1);
+	for(temp_delay=0;temp_delay<5;temp_delay++);
 	SDA_H();
 	//Wait_uSec(2);
 }
@@ -48,9 +51,11 @@ static void IIC_SEND_ACK()
 	SCL_L();
 	CHG_SDA_OUT();
 	SDA_H();
-	swait_uSec(4);	
+	//swait_uSec(4);	
+	for(temp_delay=0;temp_delay<5;temp_delay++);
 	SCL_H();
-	Wait_uSec(1);
+	//Wait_uSec(1);
+	for(temp_delay=0;temp_delay<5;temp_delay++);
 	//SCL_L();
 }
 /*
@@ -78,7 +83,6 @@ static char IIC_CHECK_ACK()
 	return ret;
 }
 */
-unsigned char markbit[] = {0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80};
 
 static char IIC_SEND_BYTE(unsigned char val)
 {
@@ -105,11 +109,10 @@ static char IIC_SEND_BYTE(unsigned char val)
 			_nop_();
 		}
 		*/
-		_nop_();
-		_nop_();
-		_nop_();
+		for(temp_delay=0;temp_delay<35;temp_delay++);
 		SCL_H();
-		swait_uSec(2);		
+		//swait_uSec(2);		
+		for(temp_delay=0;temp_delay<5;temp_delay++);
 		//SCL_L();
 		//Wait_uSec(2);
 	}
@@ -117,9 +120,11 @@ static char IIC_SEND_BYTE(unsigned char val)
 
 	SCL_L();
 	CHG_SDA_IN();
-	swait_uSec(3);	
+	//swait_uSec(3);	
+	for(temp_delay=0;temp_delay<5;temp_delay++);
 	SCL_H();
-	swait_uSec(3);
+	//swait_uSec(3);
+	for(temp_delay=0;temp_delay<5;temp_delay++);
 	if(GET_SDA() == 0)
 	{
 		i = 1;
@@ -144,11 +149,10 @@ static unsigned char IIC_GET_BYTE()
 	for(i=7; i>=0; i--)
 	{
 		SCL_L();
-		swait_uSec(3);
+		//swait_uSec(3);
+		for(temp_delay=0;temp_delay<5;temp_delay++);
 		SCL_H();
-		_nop_();
-		_nop_();
-		_nop_();
+		for(temp_delay=0;temp_delay<35;temp_delay++);
 		if(GET_SDA())
 		{
 		   rdata |= markbit[i];
@@ -180,7 +184,8 @@ void  I2C_write(unsigned char reg, unsigned char val)
 	IIC_SEND_BYTE(val);
 	#endif
 	IIC_STOP();
-	Wait_uSec(2);
+	//Wait_uSec(2);
+	for(temp_delay=0;temp_delay<5;temp_delay++);
 	delay_ms(100);
 	GIE = 1;
 	//return ret;
@@ -208,14 +213,16 @@ short I2C_read(unsigned char reg)
 	IIC_SEND_BYTE(IIC_ADDR);
 	IIC_SEND_BYTE(reg);
 	IIC_STOP();
-	Wait_uSec(1);
+	//Wait_uSec(1);
+	for(temp_delay=0;temp_delay<5;temp_delay++);
 	IIC_START();	
 	IIC_SEND_BYTE(IIC_ADDR+1);
 	val =IIC_GET_BYTE();
 	IIC_SEND_ACK();
 	IIC_STOP();
 	#endif
-	Wait_uSec(10);
+	//Wait_uSec(10);
+	for(temp_delay=0;temp_delay<15;temp_delay++);
 	GIE = 1;
 
 	return (short)val;

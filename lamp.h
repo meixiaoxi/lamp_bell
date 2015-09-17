@@ -5,7 +5,7 @@
 #define EnWatchDog()		WDTE=1
 	
 #define key_interrupt_enable()	INTCON |= 0x08
-#define key_interrupt_disable()	INTCON &= 0xf7
+#define key_interrupt_disable()	INTCON |= 0x08	//INTCON &= 0xf7
 
 
 #define tmr0_start()	
@@ -38,15 +38,17 @@
 #define LED_MAX_LEVEL	255
 #define LED_DEFAULT_LEVEL	200
 
-#define LED_PRE_ON	0x33
+//EEPROM 地址分配
+#define ADDR_STRENGTH_FLAG      0x00   //led strengtrh 是否有效
+#define ADDR_STRENGTH 0x09              //led 亮度
+
+#define  ADDR_ONOFF_FLAG        0x15    //亮灭状态
+
+#define LED_PRE_ON      0x33
 #define LED_NOW_ON 0x33
 
 #define LED_NOW_OFF 0xAA
 #define LED_PRE_OFF 0xAA
-
-//EEPROM 地址分配
-#define	ADDR_STRENGTH_FLAG	0x00   //led strengtrh 是否有效
-#define ADDR_STRENGTH 0x09		//led 亮度
 
 					
 #define pwm_start()	PWMCON |= 1
@@ -55,7 +57,7 @@
 #define 	LoadCtl		RA4
 #define	Cur_Ctl		RA5
 #define 	P_KEY		RA3
-
+#define   PWM_IO	       RA0
 
 extern short I2C_read(unsigned char reg);
 extern void I2C_write(unsigned char reg, unsigned char val);
